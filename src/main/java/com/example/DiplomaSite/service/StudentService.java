@@ -3,16 +3,20 @@ package com.example.DiplomaSite.service;
 import com.example.DiplomaSite.dto.CreateStudentDto;
 import com.example.DiplomaSite.dto.StudentDto;
 import com.example.DiplomaSite.dto.UpdateStudentDto;
-import com.example.DiplomaSite.entity.Student;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+import org.springframework.security.core.Authentication;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Optional;
 
 public interface StudentService {
     List<StudentDto> findAll();
-    StudentDto getById(Long id);
+
+    StudentDto getById(Long id,Authentication auth);
+
     StudentDto getByFacultyNumber(String facultyNumber);
     StudentDto create(CreateStudentDto createStudentDto);
     StudentDto update(Long id, UpdateStudentDto updateStudentDto);
-    void deleteById(Long id);
+    void delete(Long id);
 }

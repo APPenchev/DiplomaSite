@@ -7,7 +7,6 @@ import lombok.Data;
 @Data
 public class DiplomaAssignment extends IdGenerator {
 
-
     @Column(nullable = false)
     private String topic;
 

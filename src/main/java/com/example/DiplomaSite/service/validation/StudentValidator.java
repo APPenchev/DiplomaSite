@@ -6,22 +6,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class StudentValidator {
-    public void validateNewStudent(Student student) {
 
-        if (student == null) {
-            throw new StudentValidationException("Student cannot be null");
-        }
-
-        validateName(student.getName());
-        validateFacultyNumber(student.getFacultyNumber());
-    }
-
-    public void validateUpdatedStudent(Student student) {
-
-        if (student == null) {
-            throw new StudentValidationException("Updated student cannot be null");
-        }
-    }
 
     public void validateName(String name) {
         if (name == null || name.trim().isEmpty()) {

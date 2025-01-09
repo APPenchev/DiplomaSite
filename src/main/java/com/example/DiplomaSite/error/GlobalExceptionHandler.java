@@ -1,5 +1,6 @@
 package com.example.DiplomaSite.error;
 
+import com.example.DiplomaSite.entity.DiplomaAssignment;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -17,7 +18,7 @@ import java.util.logging.Logger;
 
 @ControllerAdvice
 public class GlobalExceptionHandler {
-    private static final Logger logger = (Logger) LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationExceptions(MethodArgumentNotValidException ex) {
@@ -39,7 +40,32 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({
             StudentNotFoundException.class,
             StudentValidationException.class,
-            StudentCreationException.class
+            StudentCreationException.class,
+            StudentDeletionException.class,
+            DefenseResultCreationException.class,
+            DefenseResultNotFoundException.class,
+            DefenseResultValidationException.class,
+            DefenseResultDeletionException.class,
+            DiplomaDefenseCreationException.class,
+            DiplomaDefenseNotFoundException.class,
+            DiplomaDefenseValidationException.class,
+            DiplomaDefenseDeletionException.class,
+            DiplomaThesisCreationException.class,
+            DiplomaThesisNotFoundException.class,
+            DiplomaThesisValidationException.class,
+            DiplomaThesisDeletionException.class,
+            DiplomaAssignmentCreationException.class,
+            DiplomaAssignmentNotFoundException.class,
+            DiplomaAssignmentValidationException.class,
+            DiplomaAssignmentDeletionException.class,
+            ReviewCreationException.class,
+            ReviewNotFoundException.class,
+            ReviewValidationException.class,
+            ReviewDeletionException.class,
+            TeacherCreationException.class,
+            TeacherNotFoundException.class,
+            TeacherValidationException.class,
+            TeacherDeletionException.class,
     })
     public ResponseEntity<ErrorResponse> handleStudentExceptions(RuntimeException ex) {
 

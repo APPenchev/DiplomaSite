@@ -11,6 +11,4 @@ public class CreateStudentDto {
     @NotBlank
     private String facultyNumber;
 
-    @NotBlank
-    private String keycloakUserId;
 }

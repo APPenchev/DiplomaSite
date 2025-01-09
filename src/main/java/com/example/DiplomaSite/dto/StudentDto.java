@@ -9,4 +9,5 @@ public class StudentDto extends IdGenerator {
     private String name;
     private String facultyNumber;
     private String keycloakUserId;
+    private Long diplomaAssignmentId;
 }

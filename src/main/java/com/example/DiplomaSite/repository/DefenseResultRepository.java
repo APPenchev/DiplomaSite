@@ -1,10 +1,13 @@
 package com.example.DiplomaSite.repository;
 
 import com.example.DiplomaSite.entity.DefenseResult;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
-public interface DefenseResultRepository {
+@Repository
+public interface DefenseResultRepository extends JpaRepository<DefenseResult, Long>{
 
-    List<DefenseResult> findByGradeBetween(Double minGrade, Double maxGrade);
+    List<DefenseResult> findAllByDiplomaThesisId(Long thesisId);
 }

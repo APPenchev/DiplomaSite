@@ -1,15 +1,17 @@
 package com.example.DiplomaSite.entity;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.Data;
 
 @Entity
 @Data
-public class DefenseResult {
+public class DefenseResult extends IdGenerator {
 
     private Double grade;
 
-    @ManyToOne
+    @OneToOne
     @JoinColumn(name = "defense_id", nullable = false)
     private DiplomaDefense diplomaDefense;
 

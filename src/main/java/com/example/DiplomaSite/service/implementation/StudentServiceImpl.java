@@ -11,8 +11,11 @@ import com.example.DiplomaSite.error.StudentValidationException;
 import com.example.DiplomaSite.repository.StudentRepository;
 import com.example.DiplomaSite.service.StudentService;
 import com.example.DiplomaSite.service.validation.StudentValidator;
+import jakarta.annotation.security.RolesAllowed;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -40,6 +43,7 @@ public class StudentServiceImpl implements StudentService {
 
     @Override
     @Transactional(readOnly = true)
+    @RolesAllowed({"ROLE_ADMIN", "ROLE_TEACHER"})
     public List<StudentDto> findAll() {
         return studentRepository.findAll()
                 .stream()
@@ -49,7 +53,12 @@ public class StudentServiceImpl implements StudentService {
 
     @Override
     @Transactional(readOnly = true)
-    public StudentDto getById(@NotNull @Positive Long id) {
+    @PreAuthorize("hasRole('ROLE_ADMIN') " +
+            "or hasRole('ROLE_TEACHER') " +
+            "or (hasRole('ROLE_STUDENT')) and @studentSecurity.isSameStudent(#id, @keycloakUtils.getUserId(#auth)))")
+    public StudentDto getById(
+            @NotNull @Positive Long id,
+            Authentication auth) {
         Student student = studentRepository.findById(id)
                 .orElseThrow(() -> new StudentNotFoundException("Student not found with id: " + id));
         return toStudentDto(student);
@@ -57,6 +66,7 @@ public class StudentServiceImpl implements StudentService {
 
     @Override
     @Transactional(readOnly = true)
+    @RolesAllowed({"ROLE_ADMIN", "ROLE_TEACHER"})
     public StudentDto getByFacultyNumber(@NotNull String facultyNumber) {
         studentValidator.validateFacultyNumber(facultyNumber);
         Student student = studentRepository.findByFacultyNumber(facultyNumber)
@@ -66,6 +76,7 @@ public class StudentServiceImpl implements StudentService {
 
     @Override
     @Transactional
+    @RolesAllowed({"ROLE_ADMIN"})
     public StudentDto create(@Valid CreateStudentDto createStudentDto) {
         studentValidator.validateFacultyNumber(createStudentDto.getFacultyNumber());
         studentValidator.validateName(createStudentDto.getName());
@@ -77,7 +88,6 @@ public class StudentServiceImpl implements StudentService {
         Student student = new Student();
         student.setName(createStudentDto.getName());
         student.setFacultyNumber(createStudentDto.getFacultyNumber());
-        student.setKeycloakUserId(createStudentDto.getKeycloakUserId());
 
         try {
             Student saved = studentRepository.save(student);
@@ -89,7 +99,8 @@ public class StudentServiceImpl implements StudentService {
 
     @Override
     @Transactional
-    public StudentDto update(@NotNull @Positive Long id, @Valid UpdateStudentDto updateStudentDto) {
+    @RolesAllowed({"ROLE_ADMIN"})
+    public StudentDto update(@NotNull @Positive Long id, UpdateStudentDto updateStudentDto) {
         Student existing = studentRepository.findById(id)
                 .orElseThrow(() -> new StudentNotFoundException("Student not found with id: " + id));
 
@@ -100,7 +111,6 @@ public class StudentServiceImpl implements StudentService {
 
         if (updateStudentDto.getFacultyNumber() != null) {
             studentValidator.validateFacultyNumber(updateStudentDto.getFacultyNumber());
-            // Ensure faculty number uniqueness
             studentRepository.findByFacultyNumber(updateStudentDto.getFacultyNumber())
                     .filter(s -> !s.getId().equals(id))
                     .ifPresent(s -> {
@@ -110,17 +120,21 @@ public class StudentServiceImpl implements StudentService {
         }
 
         if (updateStudentDto.getKeycloakUserId() != null) {
-            // If you have any validation for keycloakUserId, do it here
             existing.setKeycloakUserId(updateStudentDto.getKeycloakUserId());
         }
 
-        Student saved = studentRepository.save(existing);
-        return toStudentDto(saved);
+        try {
+            Student saved = studentRepository.save(existing);
+            return toStudentDto(saved);
+        } catch (DataIntegrityViolationException e) {
+            throw new StudentCreationException("Unable to update student due to data integrity issues", e);
+        }
     }
 
     @Override
     @Transactional
-    public void deleteById(@NotNull @Positive Long id) {
+    @RolesAllowed({"ROLE_ADMIN"})
+    public void delete(@NotNull @Positive Long id) {
         if (!studentRepository.existsById(id)) {
             throw new StudentNotFoundException("Student not found with id: " + id);
         }
@@ -138,6 +152,9 @@ public class StudentServiceImpl implements StudentService {
         dto.setName(student.getName());
         dto.setFacultyNumber(student.getFacultyNumber());
         dto.setKeycloakUserId(student.getKeycloakUserId());
+        if (student.getDiplomaAssignment() != null) {
+            dto.setDiplomaAssignmentId(student.getDiplomaAssignment().getId());
+        }
         return dto;
     }
 }

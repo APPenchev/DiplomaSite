@@ -12,12 +12,16 @@ public class DiplomaDefense extends IdGenerator {
 
     private LocalDate date;
 
+    @ManyToOne
+    @JoinColumn(name = "supervisor_id")
+    private Teacher supervisor;
+
     @ManyToMany
     @JoinTable(name = "defense_teacher",
             joinColumns = @JoinColumn(name = "defense_id"),
             inverseJoinColumns = @JoinColumn(name = "teacher_id"))
     private List<Teacher> teachers;
 
-    @OneToMany(mappedBy = "diplomaDefense")
-    private List<DefenseResult> defenseResults;
+    @OneToOne(mappedBy = "diplomaDefense")
+    private DefenseResult defenseResult;
 }

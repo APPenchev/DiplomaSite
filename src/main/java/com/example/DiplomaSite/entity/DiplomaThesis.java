@@ -19,6 +19,8 @@ public class DiplomaThesis extends IdGenerator {
 
     private LocalDate uploadDate;
 
+    private Boolean confidential;
+
     @OneToOne
     @JoinColumn(name = "assignment_id", nullable = false)
     private DiplomaAssignment diplomaAssignment;
