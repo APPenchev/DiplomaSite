@@ -19,4 +19,8 @@ public class TeacherSecurity {
                 .map(teacher -> teacher.getId().equals(teacherId))
                 .orElse(false);
     }
+
+    public boolean isSameTeacherK(String keycloakUserId, String userId) {
+        return keycloakUserId.equals(userId);
+    }
 }

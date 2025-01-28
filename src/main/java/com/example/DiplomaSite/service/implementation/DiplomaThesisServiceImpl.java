@@ -11,10 +11,11 @@ import com.example.DiplomaSite.error.DiplomaThesisCreationException;
 import com.example.DiplomaSite.error.DiplomaThesisNotFoundException;
 import com.example.DiplomaSite.repository.DiplomaAssignmentRepository;
 import com.example.DiplomaSite.repository.DiplomaThesisRepository;
+import com.example.DiplomaSite.repository.ReviewRepository;
 import com.example.DiplomaSite.service.DiplomaThesisService;
+import com.example.DiplomaSite.service.ReviewService;
 import com.example.DiplomaSite.service.security.DiplomaThesisSecurity;
 import com.example.DiplomaSite.service.validation.DiplomaThesisValidator;
-import jakarta.annotation.security.RolesAllowed;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -24,9 +25,10 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
-import java.util.stream.Collectors;
 
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 @Service
@@ -37,23 +39,27 @@ public class DiplomaThesisServiceImpl implements DiplomaThesisService {
     private final DiplomaThesisValidator diplomaThesisValidator;
     private final DiplomaAssignmentRepository diplomaAssignmentRepository;
     private final DiplomaThesisSecurity diplomaThesisSecurity;
+    private final ReviewService reviewService;
 
     @Autowired
     public DiplomaThesisServiceImpl(
             DiplomaThesisRepository diplomaThesisRepository,
             DiplomaThesisValidator diplomaThesisValidator,
             DiplomaAssignmentRepository diplomaAssignmentRepository,
-            DiplomaThesisSecurity diplomaThesisSecurity) {
+            DiplomaThesisSecurity diplomaThesisSecurity,
+            ReviewService reviewService) {
         this.diplomaThesisRepository = diplomaThesisRepository;
         this.diplomaThesisValidator = diplomaThesisValidator;
         this.diplomaAssignmentRepository = diplomaAssignmentRepository;
         this.diplomaThesisSecurity = diplomaThesisSecurity;
+        this.reviewService = reviewService;
 
     }
 
 
     @Override
     @Transactional(readOnly = true)
+    @PreAuthorize("hasAnyAuthority('admin', 'student', 'teacher')")
     public List<DiplomaThesisDto> findAll(Authentication authentication) {
         List<DiplomaThesis> allTheses = diplomaThesisRepository.findAll();
         Set<String> roles = KeycloakUtils.getUserRoles(authentication);
@@ -62,14 +68,14 @@ public class DiplomaThesisServiceImpl implements DiplomaThesisService {
                 .filter(thesis -> {
                     boolean notConfidential = diplomaThesisSecurity.isNotConfidential(thesis);
 
-                    if (roles.contains("ADMIN") || notConfidential) {
+                    if (roles.contains("admin") || notConfidential) {
                         return true;
                     }
-                    else if (roles.contains("STUDENT")) {
-                        return diplomaThesisSecurity.isStudent(thesis, currentUserId);
+                    else if (roles.contains("student")) {
+                        return diplomaThesisSecurity.isStudent(thesis.getId(), currentUserId);
                     }
-                    else if (roles.contains("TEACHER")) {
-                        return diplomaThesisSecurity.isSupervisor(thesis, currentUserId);
+                    else if (roles.contains("teacher")) {
+                        return diplomaThesisSecurity.isSupervisor(thesis.getId(), currentUserId);
                     }
                     return false;
                 })
@@ -82,12 +88,10 @@ public class DiplomaThesisServiceImpl implements DiplomaThesisService {
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize(
-            "hasRole('ADMIN')"
-                    + " or (hasRole('TEACHER') and @diplomaThesisSecurity.isSupervisor(#id, @keycloakUtils.getUserId(#auth))"
-                    + " or (hasRole('STUDENT') and @diplomaThesisSecurity.isNotConfidential(#id))"
-                    + " or @diplomaThesisSecurity.isStudent(#id, @keycloakUtils.getUserId(#auth)"
-    )
+    @PreAuthorize("hasAnyAuthority('admin') or " +
+            "hasAnyAuthority('teacher')  or " +
+            "(hasAnyAuthority('student') and @diplomaThesisSecurity.isNotConfidential(#id)) or " +
+            "(hasAnyAuthority('student') and @diplomaThesisSecurity.isStudent(#id, @keycloakUtils.getUserId(#auth)))")
     public DiplomaThesisDto getById(@NotNull @Positive Long id,
                                     Authentication auth) {
         return diplomaThesisRepository.findById(id)
@@ -95,11 +99,19 @@ public class DiplomaThesisServiceImpl implements DiplomaThesisService {
                 .orElseThrow(() -> new DiplomaThesisNotFoundException("Diploma thesis not found with id: " + id));
     }
 
+    public DiplomaThesisDto getByToken(Authentication auth) {
+        return diplomaThesisRepository.findByStudentKeycloakId(KeycloakUtils.getUserId(auth))
+                .map(this::toDiplomaThesisDto)
+                .orElseThrow(() -> new DiplomaThesisNotFoundException("Diploma thesis not found for user with id: " + KeycloakUtils.getUserId(auth)));
+    }
+
     @Override
     @Transactional
-    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') or hasRole('STUDENT'))")
+    @PreAuthorize("hasAnyAuthority('admin', 'teacher', 'student')")
     public DiplomaThesisDto create(
-            @Valid CreateDiplomaThesisDto diplomaThesis) {
+            @Valid CreateDiplomaThesisDto diplomaThesis,
+            Authentication auth) {
+
         diplomaThesisValidator.validateTitle(diplomaThesis.getTitle());
         diplomaThesisValidator.validateText(diplomaThesis.getText());
 
@@ -107,21 +119,55 @@ public class DiplomaThesisServiceImpl implements DiplomaThesisService {
         newDiplomaThesis.setTitle(diplomaThesis.getTitle());
         newDiplomaThesis.setText(diplomaThesis.getText());
         newDiplomaThesis.setUploadDate(diplomaThesis.getUploadDate());
-        newDiplomaThesis.setConfidential(diplomaThesis.getConfidential());
+        newDiplomaThesis.setConfidential(true);
+
+        // Fetch the assignment
+        DiplomaAssignment assignment = diplomaAssignmentRepository.findById(diplomaThesis.getAssignmentId())
+                .orElseThrow(() -> new DiplomaAssignmentNotFoundException("Diploma assignment not found with id: " + diplomaThesis.getAssignmentId()));
+        newDiplomaThesis.setDiplomaAssignment(assignment);
+
+        // Check if an existing thesis for the same student exists
+        Optional<DiplomaThesis> existingThesis = diplomaThesisRepository.findByStudentKeycloakId(assignment.getStudent().getKeycloakUserId());
+        if (existingThesis.isPresent()) {
+            DiplomaThesis previousThesis = existingThesis.get();
+
+            // Check if the thesis has been reviewed negatively
+            if (previousThesis.getReview() != null && Boolean.FALSE.equals(previousThesis.getReview().getPositive())) {
+                // Step 1: Delete the review associated with the old thesis
+                reviewService.delete(previousThesis.getReview().getId(), auth);
+
+                // Step 2: Nullify the relationship between the old thesis and the assignment
+                previousThesis.setDiplomaAssignment(null);
+                diplomaThesisRepository.save(previousThesis);
+
+                // Step 3: Flush the changes to ensure the database reflects the removal of the assignment reference
+                diplomaThesisRepository.flush();
+
+                // Step 4: Delete the old thesis
+                diplomaThesisRepository.delete(previousThesis);
+
+                // Step 5: Flush again to ensure the thesis row is completely removed
+                diplomaThesisRepository.flush();
+            } else {
+                // If the thesis hasn't been reviewed negatively, throw an exception
+                throw new DiplomaThesisCreationException("A valid thesis already exists for this student and cannot be resubmitted.", null);
+            }
+        }
+
         try {
+            // Save the new thesis
             DiplomaThesis savedDiplomaThesis = diplomaThesisRepository.save(newDiplomaThesis);
             return toDiplomaThesisDto(savedDiplomaThesis);
         } catch (Exception e) {
             throw new DiplomaThesisCreationException("Unable to create diploma thesis due to data integrity issues", e);
         }
-
     }
 
     @Override
     @Transactional
-    @PreAuthorize("hasRole('ADMIN') or " +
-            "(hasRole('TEACHER') and @diplomaThesisSecurity.isSupervisor(#id, @keycloakUtils.getUserId(#auth))) or " +
-            "(hasRole('STUDENT') and @diplomaThesisSecurity.isStudent(#id, @keycloakUtils.getUserId(#auth)))")
+    @PreAuthorize("hasAnyAuthority('admin') or " +
+            "(hasAnyAuthority('teacher') and @diplomaThesisSecurity.isSupervisor(#id, @keycloakUtils.getUserId(#auth))) or " +
+            "(hasAnyAuthority('student') and @diplomaThesisSecurity.isStudent(#id, @keycloakUtils.getUserId(#auth)) and @diplomaThesisSecurity.isNotReviewed(#id))")
     public DiplomaThesisDto update(
             @NotNull @Positive Long id,
             UpdateDiplomaThesisDto diplomaThesisDto,
@@ -144,6 +190,7 @@ public class DiplomaThesisServiceImpl implements DiplomaThesisService {
         if (diplomaThesisDto.getConfidential() != null) {
             diplomaThesis.setConfidential(diplomaThesisDto.getConfidential());
         }
+
         try {
             diplomaThesis = diplomaThesisRepository.save(diplomaThesis);
             return toDiplomaThesisDto(diplomaThesis);
@@ -155,14 +202,20 @@ public class DiplomaThesisServiceImpl implements DiplomaThesisService {
 
     @Override
     @Transactional
-    @PreAuthorize("hasRole('ADMIN') or " +
-            "(hasRole('TEACHER') and @diplomaThesisSecurity.isSupervisor(#id, @keycloakUtils.getUserId(#auth)))")
+    @PreAuthorize("hasAnyAuthority('admin') or " +
+            "(hasAnyAuthority('teacher') and @diplomaThesisSecurity.isSupervisor(#id, @keycloakUtils.getUserId(#auth)))" +
+            "(hasAnyAuthority('student') and @diplomaThesisSecurity.isStudent(#id, @keycloakUtils.getUserId(#auth)))")
     public void deleteById(
             @NotNull @Positive Long id,
             Authentication authentication) {
-        diplomaThesisRepository.findById(id)
+        DiplomaThesis thesis = diplomaThesisRepository.findById(id)
                 .orElseThrow(() -> new DiplomaThesisNotFoundException("Diploma thesis not found with id: " + id));
-
+        if (thesis.getReview() != null)
+            reviewService.delete(thesis.getReview().getId(), authentication);
+        if (thesis.getDiplomaAssignment() != null) {
+            thesis.getDiplomaAssignment().setDiplomaThesis(null);
+            diplomaAssignmentRepository.save(thesis.getDiplomaAssignment());
+        }
         try {
             diplomaThesisRepository.deleteById(id);
         } catch (Exception e) {
@@ -172,7 +225,7 @@ public class DiplomaThesisServiceImpl implements DiplomaThesisService {
 
     @Override
     @Transactional
-    @RolesAllowed({"ROLE_ADMIN"})
+    @PreAuthorize("hasAnyAuthority('admin')")
     public List<DiplomaThesisDto> findByGradeBetween(
             @NotNull @Positive Double minGrade,
             @NotNull @Positive Double maxGrade) {
@@ -184,9 +237,9 @@ public class DiplomaThesisServiceImpl implements DiplomaThesisService {
 
     @Override
     @Transactional
-    @PreAuthorize("hasRole('ADMIN') or " +
-            "(hasRole('TEACHER') and @diplomaThesisSecurity.isSupervisor(#id, @keycloakUtils.getUserId(#auth)))" +
-            "(hasRole('STUDENT') and @diplomaThesisSecurity.isStudent(#id, @keycloakUtils.getUserId(#auth)))")
+    @PreAuthorize("hasAnyAuthority('admin') or " +
+            "(hasAnyAuthority('teacher') and @diplomaThesisSecurity.isSupervisor(#thesisId, @keycloakUtils.getUserId(#auth))) or " +
+            "(hasAnyAuthority('student') and @diplomaThesisSecurity.isStudent(#thesisId, @keycloakUtils.getUserId(#auth)))")
     public DiplomaThesisDto linkThesisToAssignment(
             @NotNull @Positive Long thesisId,
             @NotNull @Positive Long assignmentId,
@@ -218,6 +271,19 @@ public class DiplomaThesisServiceImpl implements DiplomaThesisService {
         diplomaThesisDto.setText(diplomaThesis.getText());
         diplomaThesisDto.setUploadDate(diplomaThesis.getUploadDate());
         diplomaThesisDto.setConfidential(diplomaThesis.getConfidential());
+        if (diplomaThesis.getDiplomaAssignment() != null) {
+            diplomaThesisDto.setAssignmentId(diplomaThesis.getDiplomaAssignment().getId());
+            if (diplomaThesis.getDiplomaAssignment().getStudent() != null) {
+                diplomaThesisDto.setStudentKeycloakId(diplomaThesis.getDiplomaAssignment().getStudent().getKeycloakUserId());
+            }
+            if (diplomaThesis.getDiplomaAssignment().getSupervisor() != null) {
+                diplomaThesisDto.setTeacherKeycloakId(diplomaThesis.getDiplomaAssignment().getSupervisor().getKeycloakUserId());
+            }
+
+        }
+        if (diplomaThesis.getReview() != null) {
+            diplomaThesisDto.setReviewId(diplomaThesis.getReview().getId());
+        }
         return diplomaThesisDto;
     }
 

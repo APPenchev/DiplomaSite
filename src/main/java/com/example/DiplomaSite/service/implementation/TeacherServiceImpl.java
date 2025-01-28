@@ -3,16 +3,17 @@ package com.example.DiplomaSite.service.implementation;
 import com.example.DiplomaSite.dto.CreateTeacherDto;
 import com.example.DiplomaSite.dto.TeacherDto;
 import com.example.DiplomaSite.dto.UpdateTeacherDto;
+import com.example.DiplomaSite.entity.DiplomaAssignment;
 import com.example.DiplomaSite.entity.Teacher;
 import com.example.DiplomaSite.enums.TeacherPosition;
 import com.example.DiplomaSite.error.TeacherCreationException;
 import com.example.DiplomaSite.error.TeacherDeletionException;
 import com.example.DiplomaSite.error.TeacherNotFoundException;
 import com.example.DiplomaSite.repository.TeacherRepository;
+import com.example.DiplomaSite.service.DiplomaAssignmentService;
 import com.example.DiplomaSite.service.TeacherService;
 import com.example.DiplomaSite.service.validation.TeacherValidator;
 
-import jakarta.annotation.security.RolesAllowed;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -31,18 +32,20 @@ import java.util.stream.Collectors;
 @Validated
 public class TeacherServiceImpl implements TeacherService {
 
-    public final TeacherRepository teacherRepository;
-    public final TeacherValidator teacherValidator;
+    private final TeacherRepository teacherRepository;
+    private final TeacherValidator teacherValidator;
+    private final DiplomaAssignmentService diplomaAssignmentService;
 
     @Autowired
-    public TeacherServiceImpl(TeacherRepository teacherRepository, TeacherValidator teacherValidator) {
+    public TeacherServiceImpl(TeacherRepository teacherRepository, TeacherValidator teacherValidator, DiplomaAssignmentService diplomaAssignmentService) {
         this.teacherRepository = teacherRepository;
         this.teacherValidator = teacherValidator;
+        this.diplomaAssignmentService = diplomaAssignmentService;
     }
 
     @Override
     @Transactional(readOnly = true)
-    @RolesAllowed({"ROLE_ADMIN"})
+    @PreAuthorize("hasAnyAuthority('admin','teacher')")
     public List<TeacherDto> findAll() {
         return teacherRepository.findAll()
                 .stream()
@@ -52,8 +55,8 @@ public class TeacherServiceImpl implements TeacherService {
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize("hasRole('ROLE_ADMIN') or " +
-            "(hasRole('ROLE_TEACHER') and @teacherSecurity.isSameTeacher(#id, @keycloakUtils.getUserId(#auth)))")
+    @PreAuthorize("hasAuthority('admin') or " +
+            "(hasAuthority('teacher') and @teacherSecurity.isSameTeacher(#id, @keycloakUtils.getUserId(#auth)))")
     public TeacherDto getById(
             @NotNull @Positive Long id,
             Authentication auth
@@ -65,7 +68,18 @@ public class TeacherServiceImpl implements TeacherService {
 
     @Override
     @Transactional
-    @RolesAllowed({"ROLE_ADMIN"})
+    @PreAuthorize("hasAnyAuthority('admin') or " +
+            "(hasAuthority('teacher') and @teacherSecurity.isSameTeacherK(#keycloakId, @keycloakUtils.getUserId(#auth)))")
+    public TeacherDto findTeacherIdByKeycloakId(@NotNull String keycloakId,
+                                                Authentication auth) {
+        return teacherRepository.findByKeycloakUserId(keycloakId)
+                .map(this::toTeacherDto)
+                .orElseThrow(() -> new TeacherNotFoundException("Teacher not found with keycloak id: " + keycloakId));
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize("hasAnyAuthority('admin')")
     public TeacherDto create(@Valid CreateTeacherDto createTeacherDto) {
        teacherValidator.validateName(createTeacherDto.getName());
 
@@ -84,7 +98,7 @@ public class TeacherServiceImpl implements TeacherService {
 
     @Override
     @Transactional
-    @RolesAllowed({"ROLE_ADMIN"})
+    @PreAuthorize("hasAnyAuthority('admin')")
     public TeacherDto update(@Positive @NotNull Long id,  UpdateTeacherDto teacher) {
         Teacher existing = teacherRepository.findById(id)
                 .orElseThrow(() -> new TeacherNotFoundException("Teacher not found with id: " + id));
@@ -113,11 +127,21 @@ public class TeacherServiceImpl implements TeacherService {
 
     @Override
     @Transactional
-    @RolesAllowed({"ROLE_ADMIN"})
-    public void delete(@Positive @NotNull Long id) {
-        if (!teacherRepository.existsById(id)) {
-            throw new TeacherNotFoundException("Teacher not found with id: " + id);
+    @PreAuthorize("hasAnyAuthority('admin')")
+    public void delete(
+            @Positive @NotNull Long id,
+            Authentication auth) {
+        Teacher teacher = teacherRepository.findById(id)
+                .orElseThrow(() -> new TeacherNotFoundException("Teacher not found with id: " + id));
+
+        if (!teacher.getSupervisedAssignments().isEmpty()) {
+            for (DiplomaAssignment assignment : teacher.getSupervisedAssignments()) {
+                diplomaAssignmentService.deleteById(assignment.getId(), auth);
+            }
         }
+
+        teacherRepository.flush();
+
         try {
             teacherRepository.deleteById(id);
         } catch (DataIntegrityViolationException e) {
@@ -127,7 +151,7 @@ public class TeacherServiceImpl implements TeacherService {
 
     @Override
     @Transactional
-    @RolesAllowed({"ROLE_ADMIN"})
+    @PreAuthorize("hasAnyAuthority('admin')")
     public List<TeacherDto> getTeachersByName(@NotNull String namePart) {
         return teacherRepository.findByNameContainingIgnoreCase(namePart)
                 .stream()
@@ -137,7 +161,7 @@ public class TeacherServiceImpl implements TeacherService {
 
     @Override
     @Transactional
-    @RolesAllowed({"ROLE_ADMIN"})
+    @PreAuthorize("hasAnyAuthority('admin')")
     public List<TeacherDto> getTeachersByPosition(@NotNull TeacherPosition position) {
         return teacherRepository.findByPosition(position)
                 .stream()
@@ -148,7 +172,7 @@ public class TeacherServiceImpl implements TeacherService {
 
     @Override
     @Transactional
-    @PreAuthorize("hasRole('ROLE_ADMIN') or (hasRole('ROLE_TEACHER') and @teacherSecurity.isSameTeacher(#teacherId, @keycloakUtils.getUserId(#auth)))")
+    @PreAuthorize("hasAuthority('admin') or (hasAuthority('teacher') and @teacherSecurity.isSameTeacher(#teacherId, @keycloakUtils.getUserId(#auth)))")
     public Long countSuccessfullyGraduatedStudentsForTeacher(
             @NotNull @Positive Long teacherId,
             @NotNull @Positive Double passingGrade,

@@ -4,6 +4,10 @@ plugins {
 	id 'java'
 }
 
+bootJar {
+	archiveFileName = 'DiplomaSite.jar'
+}
+
 group = 'com.example'
 version = '0.0.1-SNAPSHOT'
 
@@ -30,6 +34,7 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-security'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+	implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
 	implementation 'org.keycloak:keycloak-spring-boot-starter:25.0.3'
 	implementation 'org.keycloak:keycloak-admin-client:25.0.3'
 	implementation 'mysql:mysql-connector-java:8.0.33'
@@ -43,6 +48,7 @@ dependencies {
 	implementation 'org.mapstruct:mapstruct:1.5.5.Final'
 	annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.5.Final'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	developmentOnly 'org.springframework.boot:spring-boot-docker-compose'
 }
 
 test {

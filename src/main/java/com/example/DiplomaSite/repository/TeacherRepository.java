@@ -20,7 +20,7 @@ public interface TeacherRepository extends JpaRepository<Teacher, Long> {
     // Броят на защитилите успешно дипломна работа на определен преподавател.
     @Query("SELECT COUNT(r) " +
             "FROM DefenseResult r " +
-            "JOIN r.diplomaThesis dt " +
+            "JOIN r.diplomaDefense.diplomaThesis dt " +
             "JOIN dt.diplomaAssignment da " +
             "WHERE da.supervisor.id = :teacherId " +
             "AND r.grade >= :passingGrade")
@@ -29,4 +29,6 @@ public interface TeacherRepository extends JpaRepository<Teacher, Long> {
 
 
     Optional<Teacher> findByKeycloakUserId(String keycloakUserId);
+
+    void deleteByKeycloakUserId(String keycloakId);
 }

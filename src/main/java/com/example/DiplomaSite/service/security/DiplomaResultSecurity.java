@@ -15,12 +15,14 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 @Component
 public class DiplomaResultSecurity {
 
+    private final static Logger logger = Logger.getLogger(DiplomaResultSecurity.class.getName());
     private final DefenseResultRepository diplomaResultRepository;
     private final DiplomaThesisRepository diplomaThesisRepository;
 
@@ -34,22 +36,29 @@ public class DiplomaResultSecurity {
 
     public boolean isStudent(Long resultId, String keycloakUserId) {
         return diplomaResultRepository.findById(resultId)
-                .map(result -> result.getDiplomaThesis().getDiplomaAssignment().getStudent().getKeycloakUserId().equals(keycloakUserId)).orElse(false);
+                .map(result -> result.getDiplomaDefense().getDiplomaThesis().getDiplomaAssignment().getStudent().getKeycloakUserId().equals(keycloakUserId)).orElse(false);
     }
 
-    public boolean isDefenceTeacher(Long resultId, String keycloakUserId) {
-        return diplomaResultRepository.findById(resultId)
-                .map(result -> {
-                    DiplomaDefense diplomaDefense = result.getDiplomaDefense();
-                    return Stream.concat(
-                                    Stream.ofNullable(diplomaDefense.getSupervisor()),
-                                    Optional.ofNullable(diplomaDefense.getTeachers())
-                                            .orElseGet(Collections::emptyList)
-                                            .stream()
-                            )
-                            .anyMatch(teacher -> keycloakUserId.equals(teacher.getKeycloakUserId()));
-                })
-                .orElse(false);
+    public boolean isDefenseSupervisor(Long resultId, String keycloakUserId) {
+
+       DefenseResult result = diplomaResultRepository.findById(resultId).orElse(null);
+        if (result == null) {
+            return false;
+        }
+
+        DiplomaDefense defense = result.getDiplomaDefense();
+        if (defense == null) {
+            return false;
+        }
+
+        Teacher supervisor = defense.getSupervisor();
+        if (supervisor == null) {
+            return false;
+        }
+        logger.info("Supervisor keycloakUserId: " + supervisor.getKeycloakUserId());
+        logger.info("keycloakUserId: " + keycloakUserId);
+
+        return supervisor.getKeycloakUserId().equals(keycloakUserId);
     }
 
     public boolean isStudentThesis(Long thesisId, String keycloakUserId) {
@@ -59,11 +68,11 @@ public class DiplomaResultSecurity {
 
     public boolean isDefenceTeacherThesis(Long thesisId, String keycloakUserId) {
         return diplomaThesisRepository.findById(thesisId)
-                .map(thesis -> thesis.getDefenseResults().stream()
-                        .map(DefenseResult::getDiplomaDefense)
-                        .flatMap(diplomaDefense -> Stream.concat(
-                                Stream.ofNullable(diplomaDefense.getSupervisor()),
-                                Optional.ofNullable(diplomaDefense.getTeachers())
+                .map(thesis -> thesis.getDiplomaDefenses().stream()
+                        .map(DiplomaDefense::getDefenseResult)
+                        .flatMap(diplomaResult -> Stream.concat(
+                                Stream.ofNullable(diplomaResult.getDiplomaDefense().getSupervisor()),
+                                Optional.ofNullable(diplomaResult.getDiplomaDefense().getTeachers())
                                         .orElseGet(Collections::emptyList)
                                         .stream()
                         ))

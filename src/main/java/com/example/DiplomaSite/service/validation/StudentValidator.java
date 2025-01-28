@@ -18,8 +18,8 @@ public class StudentValidator {
     }
 
     public void validateFacultyNumber(String facultyNumber) {
-        if (facultyNumber == null || !facultyNumber.matches("^[A-Z]{2}\\d{6}$")) {
-            throw new StudentValidationException("Invalid faculty number format. Must be 2 uppercase letters followed by 6 digits.");
+        if (facultyNumber == null || !facultyNumber.matches("[0-9]{6}")) {
+            throw new StudentValidationException("Invalid faculty number format. Must be 6 digits.");
         }
     }
 }

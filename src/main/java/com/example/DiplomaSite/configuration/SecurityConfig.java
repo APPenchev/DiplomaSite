@@ -1,83 +1,103 @@
 package com.example.DiplomaSite.configuration;
 
-import com.example.DiplomaSite.repository.StudentRepository;
-import org.keycloak.OAuth2Constants;
-import org.keycloak.adapters.KeycloakConfigResolver;
+import com.nimbusds.jose.shaded.gson.internal.LinkedTreeMap;
+import jakarta.ws.rs.HttpMethod;
 import org.keycloak.adapters.springboot.KeycloakSpringBootConfigResolver;
 import org.keycloak.adapters.springsecurity.KeycloakSecurityComponents;
 import org.keycloak.adapters.springsecurity.authentication.KeycloakAuthenticationProvider;
-import org.keycloak.admin.client.Keycloak;
-import org.keycloak.admin.client.KeycloakBuilder;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.keycloak.adapters.springsecurity.filter.KeycloakSecurityContextRequestFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.core.convert.converter.Converter;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.annotation.web.configurers.oauth2.server.resource.OAuth2ResourceServerConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.mapping.SimpleAuthorityMapper;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.logout.LogoutFilter;
+import org.springframework.security.web.authentication.session.RegisterSessionAuthenticationStrategy;
+import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 
 @Configuration
-@Import(KeycloakSecurityComponents.class)
+@EnableWebSecurity
+@EnableMethodSecurity
 public class SecurityConfig {
 
-    @Value("${keycloak.auth-server-url}")
-    private String authServerUrl;
-
-    @Value("${keycloak.realm}")
-    private String realm;
-
-    @Value("${keycloak.resource}")
-    private String clientId;
-
-    @Value("${keycloak.credentials.secret}")
-    private String clientSecret;
-
     @Bean
-    public Keycloak keycloakClient() {
-        return KeycloakBuilder.builder()
-                .serverUrl(authServerUrl)
-                .realm(realm)
-                .clientId(clientId)
-                .clientSecret(clientSecret)
-                .grantType(OAuth2Constants.CLIENT_CREDENTIALS)
-                .build();
-    }
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
 
-    @Autowired
-    public void configureGlobal(AuthenticationManagerBuilder auth) {
-        auth.authenticationProvider(keycloakAuthProvider());
-    }
+        // Adjust these as needed for your environment
+        configuration.setAllowedOrigins(List.of("http://localhost:4200"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        // If you need to send cookies or auth headers cross-domain
+        configuration.setAllowCredentials(true);
 
-    @Bean
-    public KeycloakConfigResolver keycloakConfigResolver() {
-        return new KeycloakSpringBootConfigResolver();
-    }
+        // Apply this configuration to all endpoints (/**)
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
 
-    @Bean
-    public KeycloakAuthenticationProvider keycloakAuthProvider() {
-        KeycloakAuthenticationProvider provider = new KeycloakAuthenticationProvider();
-
-        SimpleAuthorityMapper mapper = new SimpleAuthorityMapper();
-        mapper.setPrefix("ROLE_");
-        provider.setGrantedAuthoritiesMapper(mapper);
-
-        return provider;
+        return source;
     }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                .csrf(csrf -> csrf.disable())
-                .sessionManagement(session ->
-                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(authz -> authz
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/users/token").permitAll()
-                        .anyRequest().authenticated())
-                .authenticationProvider(keycloakAuthProvider());
-
+                        .requestMatchers("/api/students/*").permitAll()
+                        .anyRequest().authenticated()
+                )
+                .csrf(AbstractHttpConfigurer::disable)
+                .cors(Customizer.withDefaults())
+                .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()));
         return http.build();
+    }
+
+    @Bean
+    public JwtAuthenticationConverter jwtAuthenticationConverterForKeycloak() {
+        Converter<Jwt, Collection<GrantedAuthority>> jwtGrantedAuthoritiesConverter = jwt -> {
+            Map<String, Object> resourceAccess = jwt.getClaim("resource_access");
+
+            Object client = resourceAccess.get("diploma-application");
+
+            LinkedTreeMap<String, List<String>> clientRoleMap = (LinkedTreeMap<String, List<String>>) client;
+
+            if (clientRoleMap == null || clientRoleMap.isEmpty()) {
+                return new ArrayList<>();
+            }
+            else{
+                List<String> clientRoles = new ArrayList<>(clientRoleMap.get("roles"));
+                return clientRoles.stream()
+                        .map(SimpleGrantedAuthority::new)
+                        .collect(Collectors.toList());
+            }
+        };
+        JwtAuthenticationConverter jwtAuthenticationConverter = new JwtAuthenticationConverter();
+        jwtAuthenticationConverter.setJwtGrantedAuthoritiesConverter(jwtGrantedAuthoritiesConverter);
+        return jwtAuthenticationConverter;
     }
 }

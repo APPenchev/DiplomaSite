@@ -25,9 +25,10 @@ public class ReviewSecurity {
                 .map(review -> review.getDiplomaThesis().getDiplomaAssignment().getSupervisor().getKeycloakUserId().equals(keycloakUserId)).orElse(false);
     }
 
-    public boolean isAssinee(Long reviewId, String keycloakUserId) {
+    public boolean isAssignee(Long reviewId, String keycloakUserId) {
         return reviewRepository.findById(reviewId)
                 .map(review -> review.getDiplomaThesis().getDiplomaAssignment().getStudent().getKeycloakUserId().equals(keycloakUserId)).orElse(false);
     }
+
 
 }

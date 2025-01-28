@@ -5,8 +5,6 @@ import lombok.Data;
 
 @Data
 public class CreateUserStudentDto {
-    @NotBlank
     CreateStudentDto student;
-    @NotBlank
     UserCredentials credentials;
 }

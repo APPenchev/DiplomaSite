@@ -11,5 +11,7 @@ public class ReviewDto extends IdGenerator {
     private String text;
     private LocalDate uploadDate;
     private Boolean positive;
-    private Long teacherId;
+    private String teacherKeycloakId;
+    private String studentKeycloakId;
+    private Long thesisId;
 }

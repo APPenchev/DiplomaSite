@@ -1,5 +1,6 @@
 package com.example.DiplomaSite.service.implementation;
 
+import com.example.DiplomaSite.configuration.KeycloakUtils;
 import com.example.DiplomaSite.dto.CreateDiplomaAssignmentDto;
 import com.example.DiplomaSite.dto.DiplomaAssignmentDto;
 import com.example.DiplomaSite.dto.UpdateDiplomaAssignmentDto;
@@ -7,16 +8,15 @@ import com.example.DiplomaSite.entity.DiplomaAssignment;
 import com.example.DiplomaSite.entity.Student;
 import com.example.DiplomaSite.entity.Teacher;
 import com.example.DiplomaSite.error.*;
+import com.example.DiplomaSite.dto.AssignmentStatusProjection;
 import com.example.DiplomaSite.repository.DiplomaAssignmentRepository;
 import com.example.DiplomaSite.repository.StudentRepository;
 import com.example.DiplomaSite.repository.TeacherRepository;
 import com.example.DiplomaSite.service.DiplomaAssignmentService;
 import com.example.DiplomaSite.service.validation.DiplomaAssignmentValidator;
-import jakarta.annotation.security.RolesAllowed;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
-import org.apache.tomcat.util.http.parser.Authorization;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -49,7 +49,7 @@ public class DiplomaAssignmentServiceImpl implements DiplomaAssignmentService {
 
     @Override
     @Transactional(readOnly = true)
-    @RolesAllowed({"ROLE_ADMIN"})
+    @PreAuthorize("hasAnyAuthority('admin','teacher')")
     public List<DiplomaAssignmentDto> findAll() {
         return diplomaAssignmentRepository.findAll()
                 .stream()
@@ -59,9 +59,30 @@ public class DiplomaAssignmentServiceImpl implements DiplomaAssignmentService {
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize("hasRole('ROLE_ADMIN') or" +
-            "(hasRole('ROLE_TEACHER') and @diplomaAssignmentSecurity.isSupervisor(#id, @keycloakUtils.getUserId(#auth))) or" +
-            "(hasRole('ROLE_STUDENT') and @diplomaAssignmentSecurity.isAssignee(#id, @keycloakUtils.getUserId(#auth)))")
+    @PreAuthorize("hasAnyAuthority('admin','teacher')")
+    public List<AssignmentStatusProjection> getAssignmentStatusAndGradingProgress() {
+        return diplomaAssignmentRepository.getAssignmentStatusAndGradingProgress();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasAnyAuthority('admin','teacher')")
+    public List<AssignmentStatusProjection> getAssignmentStatusAndGradingProgressByTopic(@NotNull String topic) {
+        return diplomaAssignmentRepository.getAssignmentStatusAndGradingProgressByTopic(topic);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasAnyAuthority('admin','teacher')")
+    public List<AssignmentStatusProjection> getAssignmentStatusAndGradingProgressByTeacher(@NotNull String teacher) {
+        return diplomaAssignmentRepository.getAssignmentStatusAndGradingProgressByTeacher(teacher);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasAuthority('admin') or " +
+            "hasAuthority('teacher') or " +
+            "(hasAuthority('student') and @diplomaAssignmentSecurity.isAssignee(#id, @keycloakUtils.getUserId(#auth)))")
     public DiplomaAssignmentDto getById(
             @NotNull @Positive Long id,
             Authentication auth
@@ -73,8 +94,8 @@ public class DiplomaAssignmentServiceImpl implements DiplomaAssignmentService {
 
     @Override
     @Transactional
-    @RolesAllowed({"ROLE_ADMIN", "ROLE_TEACHER"})
-    public DiplomaAssignmentDto create(@Valid CreateDiplomaAssignmentDto createDiplomaAssignmentDto) {
+    @PreAuthorize("hasAnyAuthority('admin','teacher')")
+    public DiplomaAssignmentDto create(@Valid CreateDiplomaAssignmentDto createDiplomaAssignmentDto, Authentication auth) {
         diplomaAssignmentValidator.validateGoal(createDiplomaAssignmentDto.getGoal());
         diplomaAssignmentValidator.validateTasks(createDiplomaAssignmentDto.getTasks());
         diplomaAssignmentValidator.validateTechnologies(createDiplomaAssignmentDto.getTechnologies());
@@ -85,13 +106,26 @@ public class DiplomaAssignmentServiceImpl implements DiplomaAssignmentService {
         diplomaAssignment.setTasks(createDiplomaAssignmentDto.getTasks());
         diplomaAssignment.setTechnologies(createDiplomaAssignmentDto.getTechnologies());
         diplomaAssignment.setTopic(createDiplomaAssignmentDto.getTopic());
-        diplomaAssignment.setApproved(createDiplomaAssignmentDto.getApproved());
+        diplomaAssignment.setApproved(false);
+        if (KeycloakUtils.getUserRoles(auth).contains("teacher")) {
+            Teacher teacher = teacherRepository.findByKeycloakUserId(KeycloakUtils.getUserId(auth))
+                    .orElseThrow(() -> new TeacherNotFoundException("Teacher not found with id: " + KeycloakUtils.getUserId(auth)));
+            diplomaAssignment.setSupervisor(teacher);
+            teacher.getSupervisedAssignments().add(diplomaAssignment);
+        }
+        else {
+            Teacher teacher = teacherRepository.findById(createDiplomaAssignmentDto.getSupervisorId())
+                    .orElseThrow(() -> new TeacherNotFoundException("Teacher not found with id: " + createDiplomaAssignmentDto.getSupervisorId()));
+            diplomaAssignment.setSupervisor(teacher);
+            teacher.getSupervisedAssignments().add(diplomaAssignment);
+        }
         Student student = studentRepository.findById(createDiplomaAssignmentDto.getStudentId())
                 .orElseThrow(() -> new StudentNotFoundException("Student not found with id: " + createDiplomaAssignmentDto.getStudentId()));
-        Teacher supervisor = teacherRepository.findById(createDiplomaAssignmentDto.getSupervisorId())
-                .orElseThrow(() -> new TeacherNotFoundException("Teacher not found with id: " + createDiplomaAssignmentDto.getSupervisorId()));
+
         diplomaAssignment.setStudent(student);
-        diplomaAssignment.setSupervisor(supervisor);
+
+        student.setDiplomaAssignment(diplomaAssignment);
+
 
         try {
             DiplomaAssignment savedDiplomaAssignment = diplomaAssignmentRepository.save(diplomaAssignment);
@@ -103,8 +137,8 @@ public class DiplomaAssignmentServiceImpl implements DiplomaAssignmentService {
 
     @Override
     @Transactional
-    @PreAuthorize("hasRole('ROLE_ADMIN') or" +
-            "(hasRole('ROLE_TEACHER') and @diplomaAssignmentSecurity.isSupervisor(#id, @keycloakUtils.getUserId(#auth)))")
+    @PreAuthorize("hasAnyAuthority('admin') or " +
+            "(hasAnyAuthority('teacher') and @diplomaAssignmentSecurity.isSupervisor(#id, @keycloakUtils.getUserId(#auth)))")
     public DiplomaAssignmentDto update(
             @Positive @NotNull Long id,
             UpdateDiplomaAssignmentDto updateDiplomaAssignmentDto,
@@ -146,11 +180,35 @@ public class DiplomaAssignmentServiceImpl implements DiplomaAssignmentService {
 
     @Override
     @Transactional
-    @PreAuthorize("hasRole('ROLE_ADMIN') or" +
-            "(hasRole('ROLE_TEACHER') and @diplomaAssignmentSecurity.isSupervisor(#id, @keycloakUtils.getUserId(#auth)))")
-    public void deleteById(@NotNull @Positive Long id) {
-        if (!diplomaAssignmentRepository.existsById(id)) {
-            throw new DiplomaAssignmentNotFoundException("Diploma assignment not found with id: " + id);
+    @PreAuthorize("hasAnyAuthority('admin') or " +
+            "(hasAnyAuthority('teacher') and !@diplomaAssignmentSecurity.isSupervisor(#id, @keycloakUtils.getUserId(#auth)))")
+    public DiplomaAssignmentDto approve(@NotNull Long id, Authentication auth) {
+        DiplomaAssignment diplomaAssignment = diplomaAssignmentRepository.findById(id)
+                .orElseThrow(() -> new DiplomaAssignmentNotFoundException("Diploma assignment not found with id: " + id));
+        diplomaAssignment.setApproved(true);
+        try {
+            DiplomaAssignment approvedDiplomaAssignment = diplomaAssignmentRepository.save(diplomaAssignment);
+            return toDiplomaAssignmentDto(approvedDiplomaAssignment);
+        } catch (DiplomaAssignmentCreationException e) {
+            throw new DiplomaAssignmentCreationException("Unable to approve diploma assignment due to data integrity issues", e);
+        }
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize("hasAuthority('admin') or" +
+            "(hasAuthority('teacher') and @diplomaAssignmentSecurity.isSupervisor(#id, @keycloakUtils.getUserId(#auth)))")
+    public void deleteById(
+            @NotNull @Positive Long id,
+            Authentication auth) {
+        DiplomaAssignment diplomaAssignment = diplomaAssignmentRepository.findById(id)
+                .orElseThrow(() -> new DiplomaAssignmentNotFoundException("Diploma assignment not found with id: " + id));
+        if (diplomaAssignment.getStudent() != null) {
+            diplomaAssignment.getStudent().setDiplomaAssignment(null);
+        }
+        if (diplomaAssignment.getSupervisor() != null) {
+            diplomaAssignment.getSupervisor().getSupervisedAssignments().remove(diplomaAssignment);
+            diplomaAssignment.setSupervisor(null);
         }
 
         try {
@@ -163,7 +221,16 @@ public class DiplomaAssignmentServiceImpl implements DiplomaAssignmentService {
 
     @Override
     @Transactional(readOnly = true)
-    @RolesAllowed({"ROLE_ADMIN"})
+    @PreAuthorize("hasAuthority('student')")
+    public DiplomaAssignmentDto getByToken(Authentication auth) {
+        return diplomaAssignmentRepository.findByStudentKeycloakId(KeycloakUtils.getUserId(auth))
+                .map(this::toDiplomaAssignmentDto)
+                .orElseThrow(() -> new DiplomaAssignmentNotFoundException("Diploma assignment not found with keycloak id: " + KeycloakUtils.getUserId(auth)));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasAuthority('admin')")
     public List<DiplomaAssignmentDto> findByApprovedTrue() {
         return diplomaAssignmentRepository.findByApprovedTrue()
                 .stream()
@@ -171,19 +238,11 @@ public class DiplomaAssignmentServiceImpl implements DiplomaAssignmentService {
                 .toList();
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    @RolesAllowed({"ROLE_ADMIN"})
-    public List<DiplomaAssignmentDto> findByTopicContainingIgnoreCase(@NotNull String partialTopic) {
-        return diplomaAssignmentRepository.findByTopicContainingIgnoreCase(partialTopic)
-                .stream()
-                .map(this::toDiplomaAssignmentDto)
-                .toList();
-    }
+
 
     @Override
     @Transactional(readOnly = true)
-    @RolesAllowed({"ROLE_ADMIN"})
+    @PreAuthorize("hasAuthority('admin')")
     public List<DiplomaAssignmentDto> findBySupervisorAndApprovedTrue(@NotNull @Positive Long supervisorId) {
         return diplomaAssignmentRepository.findBySupervisorIdAndApprovedTrue(supervisorId)
                 .stream()
@@ -221,9 +280,11 @@ public class DiplomaAssignmentServiceImpl implements DiplomaAssignmentService {
         return toDiplomaAssignmentDto(assignment);
     }
 
+
+
     @Override
     @Transactional
-    @RolesAllowed({"ROLE_ADMIN"})
+    @PreAuthorize("hasAuthority('admin')")
     public DiplomaAssignmentDto linkSupervisor(
             @NotNull @Positive Long assignmentId,
             @NotNull @Positive Long teacherId,
@@ -266,10 +327,13 @@ public class DiplomaAssignmentServiceImpl implements DiplomaAssignmentService {
         diplomaAssignmentDto.setTechnologies(diplomaAssignment.getTechnologies());
         diplomaAssignmentDto.setApproved(diplomaAssignment.getApproved());
         if (diplomaAssignment.getStudent() != null) {
-            diplomaAssignmentDto.setStudent(diplomaAssignment.getStudent());
+            diplomaAssignmentDto.setStudentId(diplomaAssignment.getStudent().getId());
         }
         if (diplomaAssignment.getSupervisor() != null) {
-            diplomaAssignmentDto.setSupervisor(diplomaAssignment.getSupervisor());
+            diplomaAssignmentDto.setSupervisorId(diplomaAssignment.getSupervisor().getId());
+        }
+        if (diplomaAssignment.getDiplomaThesis() != null) {
+            diplomaAssignmentDto.setThesisId(diplomaAssignment.getDiplomaThesis().getId());
         }
         return diplomaAssignmentDto;
     }

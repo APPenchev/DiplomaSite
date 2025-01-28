@@ -30,8 +30,10 @@ public class DiplomaThesisSecurity {
      * is the supervisor of the specified DiplomaThesis (id).
      */
 
-    public boolean isSupervisor(DiplomaThesis thesis, String keycloakUserId) {
-        Teacher supervisor = thesis.getDiplomaAssignment().getSupervisor();
+    public boolean isSupervisor(Long thesis, String keycloakUserId) {
+        DiplomaThesis diplomaThesis = diplomaThesisRepository.findById(thesis).orElse(null);
+        assert diplomaThesis != null;
+        Teacher supervisor = diplomaThesis.getDiplomaAssignment().getSupervisor();
         if (supervisor == null) {
             return false;
         }
@@ -43,8 +45,10 @@ public class DiplomaThesisSecurity {
      * is the student of the specified DiplomaThesis (id).
      */
 
-    public boolean isStudent(DiplomaThesis thesis, String keycloakUserId) {
-        Student student = thesis.getDiplomaAssignment().getStudent();
+    public boolean isStudent(Long thesis, String keycloakUserId) {
+        DiplomaThesis diplomaThesis = diplomaThesisRepository.findById(thesis).orElse(null);
+        assert diplomaThesis != null;
+        Student student = diplomaThesis.getDiplomaAssignment().getStudent();
         if (student == null) {
             return false;
         }
@@ -65,6 +69,16 @@ public class DiplomaThesisSecurity {
 
     public boolean isNotConfidential(DiplomaThesis thesis) {
         return !thesis.getConfidential();
+    }
+    /**
+     * Returns true if thesis is not reviewed.
+     */
+    public boolean isNotReviewed(Long thesisId) {
+        DiplomaThesis thesis = diplomaThesisRepository.findById(thesisId).orElse(null);
+        if (thesis == null) {
+            return false;
+        }
+        return thesis.getReview() == null;
     }
 
 

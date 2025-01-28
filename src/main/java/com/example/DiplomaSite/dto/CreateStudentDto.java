@@ -8,7 +8,4 @@ public class CreateStudentDto {
     @NotBlank
     private String name;
 
-    @NotBlank
-    private String facultyNumber;
-
 }

@@ -38,7 +38,7 @@ public class DiplomaThesisController {
     @Operation(summary = "Get all DiplomaTheses",
             description = "Returns a list of all DiplomaThesis records.")
     @ApiResponse(responseCode = "200", description = "Successfully retrieved list.")
-    @RolesAllowed({"ROLE_STUDENT", "ROLE_TEACHER", "ROLE_ADMIN"})
+    @PreAuthorize("hasAnyAuthority('admin', 'student', 'teacher')")
     @GetMapping
     public ResponseEntity<List<DiplomaThesisDto>> findAll(Authentication authentication) {
         List<DiplomaThesisDto> theses = diplomaThesisService.findAll(authentication);
@@ -52,7 +52,7 @@ public class DiplomaThesisController {
             description = "Returns the DiplomaThesis with the specified ID.")
     @ApiResponse(responseCode = "200", description = "Successfully retrieved record.")
     @ApiResponse(responseCode = "404", description = "DiplomaThesis not found.")
-    @RolesAllowed({"ROLE_STUDENT", "ROLE_TEACHER", "ROLE_ADMIN"})
+    @PreAuthorize("hasAnyAuthority('admin', 'student', 'teacher')")
     @GetMapping("/{id}")
     public ResponseEntity<DiplomaThesisDto> getById(
             @PathVariable @Positive Long id,
@@ -68,11 +68,12 @@ public class DiplomaThesisController {
             description = "Creates a new DiplomaThesis record.")
     @ApiResponse(responseCode = "201", description = "Successfully created record.")
     @ApiResponse(responseCode = "400", description = "Invalid data provided.")
-    @RolesAllowed({"ROLE_STUDENT", "ROLE_TEACHER", "ROLE_ADMIN"})
+    @PreAuthorize("hasAnyAuthority('admin', 'student', 'teacher')")
     @PostMapping
     public ResponseEntity<DiplomaThesisDto> create(
-            @RequestBody @Valid CreateDiplomaThesisDto diplomaThesisDto) {
-        DiplomaThesisDto thesis = diplomaThesisService.create(diplomaThesisDto);
+            @RequestBody @Valid CreateDiplomaThesisDto diplomaThesisDto,
+            Authentication auth) {
+        DiplomaThesisDto thesis = diplomaThesisService.create(diplomaThesisDto, auth);
         return new ResponseEntity<>(thesis, HttpStatus.CREATED);
     }
 
@@ -83,7 +84,7 @@ public class DiplomaThesisController {
             description = "Updates an existing DiplomaThesis record.")
     @ApiResponse(responseCode = "200", description = "Successfully updated record.")
     @ApiResponse(responseCode = "404", description = "DiplomaThesis not found.")
-    @RolesAllowed({"ROLE_TEACHER", "ROLE_ADMIN", "ROLE_STUDENT"})
+    @PreAuthorize("hasAnyAuthority('admin', 'student', 'teacher')")
     @PutMapping("/{id}")
     public ResponseEntity<DiplomaThesisDto> update(
             @PathVariable @Positive Long id,
@@ -100,12 +101,26 @@ public class DiplomaThesisController {
             description = "Deletes the DiplomaThesis with the specified ID.")
     @ApiResponse(responseCode = "204", description = "Successfully deleted record.")
     @ApiResponse(responseCode = "404", description = "DiplomaThesis not found.")
-    @RolesAllowed({"ROLE_TEACHER", "ROLE_ADMIN"})
+    @PreAuthorize("hasAnyAuthority('admin', 'teacher')")
     @DeleteMapping("/{id}")
     public void deleteById(
             @PathVariable @Positive Long id,
             Authentication authentication) {
         diplomaThesisService.deleteById(id, authentication);
+    }
+
+    /**
+     * Get diploma theses from user token
+     */
+    @Operation(summary = "Get DiplomaThesis by Token",
+            description = "Returns the DiplomaThesis linked to the user token.")
+    @ApiResponse(responseCode = "200", description = "Successfully retrieved record.")
+    @ApiResponse(responseCode = "404", description = "DiplomaThesis not found.")
+    @PreAuthorize("hasAnyAuthority('student')")
+    @GetMapping("/user")
+    public ResponseEntity<DiplomaThesisDto> getByToken(Authentication authentication) {
+        DiplomaThesisDto thesis = diplomaThesisService.getByToken(authentication);
+        return ResponseEntity.ok(thesis);
     }
 
     /**
@@ -115,7 +130,7 @@ public class DiplomaThesisController {
             description = "Links the specified DiplomaThesis to the specified DiplomaAssignment.")
     @ApiResponse(responseCode = "200", description = "Successfully linked records.")
     @ApiResponse(responseCode = "404", description = "DiplomaThesis or DiplomaAssignment not found.")
-    @RolesAllowed({"ROLE_TEACHER", "ROLE_ADMIN"})
+    @PreAuthorize("hasAnyAuthority('teacher', 'admin')")
     @PutMapping("/{thesisId}/link-assignment/{assignmentId}")
     public ResponseEntity<DiplomaThesisDto> linkThesisToAssignment(
             @PathVariable @Positive Long thesisId,
@@ -132,7 +147,7 @@ public class DiplomaThesisController {
             description = "Returns a list of all DiplomaTheses with grades between minGrade and maxGrade.")
     @ApiResponse(responseCode = "200", description = "Successfully retrieved list.")
     @ApiResponse(responseCode = "400", description = "Invalid data provided.")
-    @RolesAllowed({"ROLE_STUDENT", "ROLE_TEACHER", "ROLE_ADMIN"})
+    @PreAuthorize("hasAnyAuthority('admin', 'student', 'teacher')")
     @GetMapping("/grade-range/{minGrade}/{maxGrade}")
     public ResponseEntity<List<DiplomaThesisDto>> findByGradeBetween(
             @PathVariable @Positive Double minGrade,

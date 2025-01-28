@@ -1,6 +1,7 @@
 package com.example.DiplomaSite.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.time.LocalDate;
@@ -10,13 +11,14 @@ public class CreateReviewDto {
     @NotBlank
     private String text;
 
-    @NotBlank
     private LocalDate uploadDate;
 
-    @NotBlank
     private Boolean positive;
 
-    @NotBlank
+    @NotNull
     private Long teacherId;
+
+    @NotNull
+    private Long thesisId;
 
 }

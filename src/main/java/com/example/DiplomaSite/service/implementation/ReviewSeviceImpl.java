@@ -12,16 +12,13 @@ import com.example.DiplomaSite.repository.ReviewRepository;
 import com.example.DiplomaSite.repository.TeacherRepository;
 import com.example.DiplomaSite.service.ReviewService;
 import com.example.DiplomaSite.service.validation.ReviewValidator;
-import jakarta.annotation.security.RolesAllowed;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.parameters.P;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -53,7 +50,7 @@ public class ReviewSeviceImpl implements ReviewService {
 
     @Override
     @Transactional(readOnly = true)
-    @RolesAllowed({"ROLE_ADMIN"})
+    @PreAuthorize("hasAuthorities('admin')")
     public List<ReviewDto> findAll() {
         return reviewRepository.findAll()
                 .stream()
@@ -63,8 +60,7 @@ public class ReviewSeviceImpl implements ReviewService {
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize("hasRole('ROLE_ADMIN') or " +
-            "(hasRole('ROLE_TEACHER') and @reviewSecurity.isReviewer(#id, @keycloakUtils.getUserId(#auth)))")
+    @PreAuthorize("hasAuthorities('admin')")
     public List<ReviewDto> getReviewsByTeacher(
             @Positive @NotNull Long teacherId,
             Authentication auth) {
@@ -76,9 +72,9 @@ public class ReviewSeviceImpl implements ReviewService {
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize("hasRole('ROLE_ADMIN') or " +
-            "(hasRole('ROLE_TEACHER') and @reviewSecurity.isReviewer(#id, @keycloakUtils.getUserId(#auth))) or " +
-            "(hasRole('ROLE_STUDENT') and @reviewSecurity.isAssignee(#id, @keycloakUtils.getUserId(#auth)))")
+    @PreAuthorize("hasAuthority('admin') or " +
+            "hasAuthority('teacher') or " +
+            "(hasAuthority('student') and @reviewSecurity.isAssignee(#id, @keycloakUtils.getUserId(#auth)))")
     public ReviewDto getById(
             @Positive @NotNull Long id,
             Authentication auth
@@ -90,7 +86,7 @@ public class ReviewSeviceImpl implements ReviewService {
 
     @Override
     @Transactional
-    @RolesAllowed({"ROLE_ADMIN", "ROLE_TEACHER"})
+    @PreAuthorize("hasAnyAuthority('admin', 'teacher')")
     public ReviewDto create(@Valid CreateReviewDto review) {
         reviewValidator.validateText(review.getText());
 
@@ -103,6 +99,10 @@ public class ReviewSeviceImpl implements ReviewService {
                 .orElseThrow(() -> new TeacherNotFoundException("Teacher not found with id: " + review.getTeacherId()));
         newReview.setReviewer(teacher);
 
+        DiplomaThesis thesis = diplomaThesisRepository.findById(review.getThesisId())
+                .orElseThrow(() -> new DiplomaThesisNotFoundException("Diploma thesis not found with id: " + review.getThesisId()));
+        newReview.setDiplomaThesis(thesis);
+
         try {
             newReview = reviewRepository.save(newReview);
             return toReviewDto(newReview);
@@ -113,8 +113,8 @@ public class ReviewSeviceImpl implements ReviewService {
 
     @Override
     @Transactional
-    @PreAuthorize("hasRole('ROLE_ADMIN') or " +
-            "(hasRole('ROLE_TEACHER') and @reviewSecurity.isReviewer(#id, @keycloakUtils.getUserId(#auth)))")
+    @PreAuthorize("hasAnyAuthority('admin') or " +
+            "(hasAuthority('teacher') and @reviewSecurity.isReviewer(#id, @keycloakUtils.getUserId(#auth)))")
     public ReviewDto update(
             @Positive @NotNull Long id,
             UpdateReviewDto review,
@@ -145,20 +145,24 @@ public class ReviewSeviceImpl implements ReviewService {
 
     @Override
     @Transactional(readOnly = true)
-    @RolesAllowed({"ROLE_ADMIN"})
+    @PreAuthorize("hasAnyAuthority('admin')")
     public Long countApprovedReviews() {
         return reviewRepository.countByPositiveFalse();
     }
 
     @Override
     @Transactional
-    @PreAuthorize("hasRole('ROLE_ADMIN') or " +
-            "(hasRole('ROLE_TEACHER') and @reviewSecurity.isReviewer(#id, @keycloakUtils.getUserId(#auth)))")
+    @PreAuthorize("hasAnyAuthority('admin') or " +
+            "(hasAuthority('teacher') and @reviewSecurity.isReviewer(#id, @keycloakUtils.getUserId(#auth))) or " +
+            "(hasAuthority('student') and @reviewSecurity.isAssignee(#id, @keycloakUtils.getUserId(#auth)))")
     public void delete(
             @NotNull @Positive Long id,
             Authentication auth) {
-        if (!reviewRepository.existsById(id)) {
-            throw new ReviewNotFoundException("Review not found with id: " + id);
+        Review review = reviewRepository.findById(id)
+                .orElseThrow(() -> new ReviewNotFoundException("Review not found with id: " + id));
+        if (review.getDiplomaThesis() != null) {
+            review.getDiplomaThesis().setReview(null);
+            diplomaThesisRepository.save(review.getDiplomaThesis());
         }
 
         try {
@@ -170,8 +174,8 @@ public class ReviewSeviceImpl implements ReviewService {
 
     @Override
     @Transactional
-    @PreAuthorize("hasRole('ROLE_ADMIN') or " +
-            "(hasRole('ROLE_TEACHER') and @reviewSecurity.isAssigner(#reviewId, @keycloakUtils.getUserId(#auth)))")
+    @PreAuthorize("hasAnyAuthority('admin') or " +
+            "(hasAuthority('teacher') and !@reviewSecurity.isAssigner(#reviewId, @keycloakUtils.getUserId(#auth)))")
     public ReviewDto linkReviewToTeacher(
             @NotNull @Positive Long reviewId,
             @NotNull @Positive Long teacherId,
@@ -203,8 +207,8 @@ public class ReviewSeviceImpl implements ReviewService {
 
     @Override
     @Transactional
-    @PreAuthorize("hasRole('ROLE_ADMIN') or " +
-            "(hasRole('ROLE_TEACHER') and @reviewSecurity.isReviewer(#reviewId, @keycloakUtils.getUserId(#auth)))")
+    @PreAuthorize("hasAnyAuthority('admin') or " +
+            "(hasAuthority('teacher') and @reviewSecurity.isAssigner(#reviewId, @keycloakUtils.getUserId(#auth)))")
     public ReviewDto linkReviewToThesis(
             @NotNull @Positive Long reviewId,
             @NotNull @Positive Long thesisId,
@@ -235,6 +239,18 @@ public class ReviewSeviceImpl implements ReviewService {
         reviewDto.setText(review.getText());
         reviewDto.setPositive(review.getPositive());
         reviewDto.setUploadDate(review.getUploadDate());
+        if (review.getReviewer() != null) {
+            reviewDto.setTeacherKeycloakId(review.getReviewer().getKeycloakUserId());
+        }
+        if (review.getDiplomaThesis() != null) {
+            reviewDto.setThesisId(review.getDiplomaThesis().getId());
+            if(review.getDiplomaThesis().getDiplomaAssignment() != null) {
+                if (review.getDiplomaThesis().getDiplomaAssignment().getStudent() != null) {
+                    reviewDto.setStudentKeycloakId(review.getDiplomaThesis().getDiplomaAssignment().getStudent().getKeycloakUserId());
+                }
+
+            }
+        }
         return reviewDto;
     }
 }

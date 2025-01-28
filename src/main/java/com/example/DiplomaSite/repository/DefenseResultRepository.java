@@ -9,5 +9,5 @@ import java.util.List;
 @Repository
 public interface DefenseResultRepository extends JpaRepository<DefenseResult, Long>{
 
-    List<DefenseResult> findAllByDiplomaThesisId(Long thesisId);
+
 }

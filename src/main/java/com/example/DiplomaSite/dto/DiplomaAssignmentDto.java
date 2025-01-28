@@ -15,6 +15,7 @@ public class DiplomaAssignmentDto extends IdGenerator {
     private String tasks;
     private String technologies;
     private Boolean approved;
-    private Student student;
-    private Teacher supervisor;
+    private Long studentId;
+    private Long supervisorId;
+    private Long thesisId;
 }

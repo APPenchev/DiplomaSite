@@ -5,7 +5,6 @@ import com.example.DiplomaSite.dto.DefenseResultDto;
 import com.example.DiplomaSite.dto.UpdateDefenseResultDto;
 import com.example.DiplomaSite.entity.DefenseResult;
 import com.example.DiplomaSite.entity.DiplomaDefense;
-import com.example.DiplomaSite.entity.DiplomaThesis;
 import com.example.DiplomaSite.error.DefenseResultCreationException;
 import com.example.DiplomaSite.error.DefenseResultNotFoundException;
 import com.example.DiplomaSite.error.DiplomaThesisNotFoundException;
@@ -14,7 +13,6 @@ import com.example.DiplomaSite.repository.DiplomaDefenseRepository;
 import com.example.DiplomaSite.repository.DiplomaThesisRepository;
 import com.example.DiplomaSite.service.DefenseResultService;
 import com.example.DiplomaSite.service.validation.DefenseResultValidator;
-import jakarta.annotation.security.RolesAllowed;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -53,7 +51,7 @@ public class DefenseResultServiceImpl implements DefenseResultService {
 
     @Override
     @Transactional(readOnly = true)
-    @RolesAllowed({"ROLE_ADMIN"})
+    @PreAuthorize("hasAnyAuthority('admin')")
     public List<DefenseResultDto> findAll() {
         return defenseResultRepository.findAll()
                 .stream()
@@ -64,23 +62,9 @@ public class DefenseResultServiceImpl implements DefenseResultService {
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize("hasRole('ROLE_ADMIN') or " +
-            "(hasRole('ROLE_TEACHER') and @diplomaResultSecurity.isDefenceTeacherThesis(#id, @keycloakUtils.getUserId(#auth))) or " +
-            "(hasRole('ROLE_STUDENT') and @diplomaResultSecurity.isStudentThesis(#id, @keycloakUtils.getUserId(#auth)))")
-    public List<DefenseResultDto> findAllByThesisId(
-            @NotNull @Positive Long thesisId,
-            Authentication auth) {
-        return defenseResultRepository.findAllByDiplomaThesisId(thesisId)
-                .stream()
-                .map(this::toDefenseResultDto)
-                .collect(Collectors.toList());
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    @PreAuthorize("hasRole('ROLE_ADMIN') or " +
-            "(hasRole('ROLE_TEACHER') and @diplomaResultSecurity.isDefenceTeacher(#id, @keycloakUtils.getUserId(#auth))) or " +
-            "(hasRole('ROLE_STUDENT') and @diplomaResultSecurity.isStudent(#id, @keycloakUtils.getUserId(#auth)))")
+    @PreAuthorize("hasAnyAuthority('admin') or " +
+            "hasAuthority('teacher') or"+
+            "(hasAuthority('student') and @diplomaResultSecurity.isStudent(#id, @keycloakUtils.getUserId(#auth)))")
     public DefenseResultDto getById(
             @NotNull @Positive Long id,
             Authentication auth) {
@@ -91,7 +75,7 @@ public class DefenseResultServiceImpl implements DefenseResultService {
 
     @Override
     @Transactional
-    @RolesAllowed({"ROLE_ADMIN", "ROLE_TEACHER"})
+    @PreAuthorize("hasAnyAuthority('admin', 'teacher')")
     public DefenseResultDto create(
             @Valid CreateDefenseResultDto defenseResult) {
         defenseResultValidator.validateGrade(defenseResult.getGrade());
@@ -101,6 +85,8 @@ public class DefenseResultServiceImpl implements DefenseResultService {
         DiplomaDefense defense = diplomaDefenseRepository.findById(defenseResult.getDefenseId())
                 .orElseThrow(() -> new DefenseResultNotFoundException("Diploma defense not found with id: " + defenseResult.getDefenseId()));
         newDefenseResult.setDiplomaDefense(defense);
+        defense.setDefenseResult(newDefenseResult);
+        defenseResultRepository.save(newDefenseResult);
 
         try {
             DefenseResult savedDefenseResult = defenseResultRepository.save(newDefenseResult);
@@ -112,8 +98,8 @@ public class DefenseResultServiceImpl implements DefenseResultService {
 
     @Override
     @Transactional
-    @PreAuthorize("hasRole('ROLE_ADMIN') or " +
-            "(hasRole('ROLE_TEACHER') and @diplomaResultSecurity.isDefenceTeacher(#id, @keycloakUtils.getUserId(#auth)))")
+    @PreAuthorize("hasAnyAuthority('admin') or " +
+            "(hasAuthority('teacher') and @diplomaResultSecurity.isDefenseSupervisor(#id, @keycloakUtils.getUserId(#auth)))")
     public DefenseResultDto update(
             @NotNull @Positive Long id,
             UpdateDefenseResultDto defenseResult,
@@ -139,8 +125,9 @@ public class DefenseResultServiceImpl implements DefenseResultService {
 
     @Override
     @Transactional
-    @PreAuthorize("hasRole('ROLE_ADMIN') or " +
-            "(hasRole('ROLE_TEACHER') and @diplomaResultSecurity.isDefenceTeacher(#id, @keycloakUtils.getUserId(#auth)))")
+    @PreAuthorize("hasAnyAuthority('admin') or " +
+            "(hasAuthority('teacher') " +
+            "and @diplomaResultSecurity.isDefenseSupervisor(#id, @keycloakUtils.getUserId(#auth)))")
     public void deleteById(
             @NotNull @Positive Long id,
             Authentication auth
@@ -157,44 +144,12 @@ public class DefenseResultServiceImpl implements DefenseResultService {
 
     }
 
-    @Override
-    @Transactional
-    @PreAuthorize("hasRole('ROLE_ADMIN') or " +
-            "(hasRole('ROLE_TEACHER') and @diplomaResultSecurity.isDefenceTeacher(#defenseResultId, @keycloakUtils.getUserId(#auth)))")
-    public DefenseResultDto linkResultToThesis(
-            @NotNull @Positive Long defenseResultId,
-            @NotNull @Positive Long thesisId,
-            Authentication auth) {
-        DefenseResult result = defenseResultRepository.findById(defenseResultId)
-                .orElseThrow(() -> new DefenseResultNotFoundException("Defense result not found with id: " + defenseResultId));
-        DiplomaThesis thesis = diplomaThesisRepository.findById(thesisId)
-                .orElseThrow(() -> new DiplomaThesisNotFoundException("Diploma thesis not found with id: " + thesisId));
 
-
-        if (result.getDiplomaThesis() != null) {
-            result.getDiplomaThesis().getDefenseResults().remove(result);
-        }
-        result.setDiplomaThesis(thesis);
-
-        if (thesis.getDefenseResults().contains(result)) {
-            throw new DefenseResultCreationException("Defense result is already linked to this thesis", null);
-        }
-        thesis.getDefenseResults().add(result);
-
-        try {
-            result = defenseResultRepository.save(result);
-            diplomaThesisRepository.save(thesis);
-        } catch (DataIntegrityViolationException e) {
-            throw new DefenseResultCreationException("Unable to link defense result to thesis due to data integrity issues", e);
-        }
-
-        return toDefenseResultDto(result);
-    }
 
     @Override
     @Transactional
-    @PreAuthorize("hasRole('ROLE_ADMIN') or " +
-            "(hasRole('ROLE_TEACHER') and @diplomaResultSecurity.isDefenceTeacher(#defenseResultId, @keycloakUtils.getUserId(#auth)))")
+    @PreAuthorize("hasAnyAuthority('admin') or " +
+            "(hasAuthority('teacher') and @diplomaResultSecurity.isDefenceTeacher(#defenseResultId, @keycloakUtils.getUserId(#auth)))")
     public DefenseResultDto linkResultToDefense(
             @NotNull @Positive Long defenseResultId,
             @NotNull @Positive Long diplomaDefenseId,

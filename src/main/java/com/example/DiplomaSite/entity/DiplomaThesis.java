@@ -22,13 +22,13 @@ public class DiplomaThesis extends IdGenerator {
     private Boolean confidential;
 
     @OneToOne
-    @JoinColumn(name = "assignment_id", nullable = false)
+    @JoinColumn(name = "assignment_id")
     private DiplomaAssignment diplomaAssignment;
 
     @OneToOne(mappedBy = "diplomaThesis", cascade = CascadeType.ALL, orphanRemoval = true)
     private Review review;
 
     @OneToMany(mappedBy = "diplomaThesis")
-    private List<DefenseResult> defenseResults;
+    private List<DiplomaDefense> diplomaDefenses;
 
 }

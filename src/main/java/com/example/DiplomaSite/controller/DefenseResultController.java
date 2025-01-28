@@ -12,6 +12,7 @@ import jakarta.validation.constraints.Positive;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -39,7 +40,7 @@ public class DefenseResultController {
     @Operation(summary = "Get all DefenseResults",
             description = "Returns a list of all DefenseResult records.")
     @ApiResponse(responseCode = "200", description = "Successfully retrieved list.")
-    @RolesAllowed({"ROLE_ADMIN"})
+    @PreAuthorize("hasAnyAuthority('admin')")
     @GetMapping
     public ResponseEntity<List<DefenseResultDto>> findAll() {
         List<DefenseResultDto> defenseResults = defenseResultService.findAll();
@@ -53,7 +54,7 @@ public class DefenseResultController {
             description = "Returns the DefenseResult with the specified ID.")
     @ApiResponse(responseCode = "200", description = "Successfully retrieved record.")
     @ApiResponse(responseCode = "404", description = "DefenseResult not found.")
-    @RolesAllowed({"ROLE_ADMIN", "ROLE_TEACHER"})
+    @PreAuthorize("hasAnyAuthority('admin', 'teacher','student')")
     @GetMapping("/{id}")
     public ResponseEntity<DefenseResultDto> getById(
             @PathVariable @Positive(message = "ID must be a positive number") Long id,
@@ -62,21 +63,7 @@ public class DefenseResultController {
         return ResponseEntity.ok(result);
     }
 
-    /**
-     * Retrieves all DefenseResults linked to a DiplomaThesis by its ID.
-     */
-    @Operation(summary = "Get DefenseResults by Thesis ID",
-            description = "Returns a list of DefenseResults linked to the specified DiplomaThesis.")
-    @ApiResponse(responseCode = "200", description = "Successfully retrieved list.")
-    @ApiResponse(responseCode = "404", description = "Thesis not found.")
-    @RolesAllowed({"ROLE_ADMIN", "ROLE_TEACHER", "ROLE_STUDENT"})
-    @GetMapping("/by-thesis/{thesisId}")
-    public ResponseEntity<List<DefenseResultDto>> findAllByThesisId(
-            @PathVariable @Positive(message = "ID must be a positive number") Long thesisId,
-            Authentication authentication) {
-        List<DefenseResultDto> defenseResults = defenseResultService.findAllByThesisId(thesisId, authentication);
-        return ResponseEntity.ok(defenseResults);
-    }
+
 
     /**
      * Creates a new DefenseResult.
@@ -85,7 +72,7 @@ public class DefenseResultController {
             description = "Creates and returns a new DefenseResult record.")
     @ApiResponse(responseCode = "201", description = "Successfully created.")
     @ApiResponse(responseCode = "400", description = "Invalid data provided.")
-    @RolesAllowed({"ROLE_ADMIN", "ROLE_TEACHER"})
+    @PreAuthorize("hasAnyAuthority('admin', 'teacher')")
     @PostMapping
     public ResponseEntity<DefenseResultDto> create(
             @Valid @RequestBody CreateDefenseResultDto createDefenseResultDto) {
@@ -100,7 +87,7 @@ public class DefenseResultController {
             description = "Updates the specified DefenseResult and returns the updated record.")
     @ApiResponse(responseCode = "200", description = "Successfully updated.")
     @ApiResponse(responseCode = "404", description = "DefenseResult not found.")
-    @RolesAllowed({"ROLE_ADMIN", "ROLE_TEACHER"})
+    @PreAuthorize("hasAnyAuthority('admin', 'teacher')")
     @PutMapping("/{id}")
     public ResponseEntity<DefenseResultDto> update(
             @PathVariable @Positive(message = "ID must be a positive number") Long id,
@@ -117,7 +104,7 @@ public class DefenseResultController {
             description = "Deletes the DefenseResult with the specified ID.")
     @ApiResponse(responseCode = "204", description = "Successfully deleted, no content.")
     @ApiResponse(responseCode = "404", description = "DefenseResult not found.")
-    @RolesAllowed({"ROLE_ADMIN", "ROLE_TEACHER"})
+    @PreAuthorize("hasAnyAuthority('admin', 'teacher')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(
             @PathVariable @Positive(message = "ID must be a positive number") Long id,
@@ -126,22 +113,6 @@ public class DefenseResultController {
         return ResponseEntity.noContent().build();
     }
 
-    /**
-     * Links an existing DefenseResult to a DiplomaThesis by their IDs.
-     */
-    @Operation(summary = "Link DefenseResult to a Thesis",
-            description = "Associates the specified DefenseResult with the specified DiplomaThesis.")
-    @ApiResponse(responseCode = "200", description = "Successfully linked.")
-    @ApiResponse(responseCode = "404", description = "Either DefenseResult or Thesis not found.")
-    @RolesAllowed({"ROLE_ADMIN", "ROLE_TEACHER"})
-    @PutMapping("/{defenseResultId}/link-thesis/{thesisId}")
-    public ResponseEntity<DefenseResultDto> linkResultToThesis(
-            @PathVariable @Positive(message = "ID must be a positive number") Long defenseResultId,
-            @PathVariable @Positive(message = "ID must be a positive number") Long thesisId,
-            Authentication authentication) {
-        DefenseResultDto linkedResult = defenseResultService.linkResultToThesis(defenseResultId, thesisId, authentication);
-        return ResponseEntity.ok(linkedResult);
-    }
 
     /**
      * Links an existing DefenseResult to a DiplomaDefense by their IDs.
@@ -150,7 +121,7 @@ public class DefenseResultController {
             description = "Associates the specified DefenseResult with the specified DiplomaDefense.")
     @ApiResponse(responseCode = "200", description = "Successfully linked.")
     @ApiResponse(responseCode = "404", description = "Either DefenseResult or DiplomaDefense not found.")
-    @RolesAllowed({"ROLE_ADMIN", "ROLE_TEACHER"})
+    @PreAuthorize("hasAnyAuthority('admin', 'teacher')")
     @PutMapping("/{defenseResultId}/link-defense/{diplomaDefenseId}")
     public ResponseEntity<DefenseResultDto> linkResultToDefense(
             @PathVariable @Positive(message = "ID must be a positive number") Long defenseResultId,

@@ -16,7 +16,7 @@ public class Teacher extends IdGenerator {
     @Column(nullable = false)
     private TeacherPosition position;
 
-    @Column(nullable = false, unique = true)
+    @Column(unique = true)
     private String keycloakUserId;
 
     @OneToMany(mappedBy = "supervisor")

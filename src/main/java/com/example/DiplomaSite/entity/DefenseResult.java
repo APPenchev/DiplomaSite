@@ -12,10 +12,8 @@ public class DefenseResult extends IdGenerator {
     private Double grade;
 
     @OneToOne
-    @JoinColumn(name = "defense_id", nullable = false)
+    @JoinColumn(name = "defense_id")
     private DiplomaDefense diplomaDefense;
 
-    @ManyToOne
-    @JoinColumn(name = "thesis_id", nullable = false)
-    private DiplomaThesis diplomaThesis;
+
 }

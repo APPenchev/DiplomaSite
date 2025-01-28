@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -36,7 +37,7 @@ public class ReviewController {
     @Operation(summary = "Get all Reviews",
             description = "Returns a list of all Review records.")
     @ApiResponse(responseCode = "200", description = "Successfully retrieved list.")
-    @RolesAllowed({"ROLE_ADMIN"})
+    @PreAuthorize("hasAnyAuthority('admin')")
     @GetMapping
     public ResponseEntity<List<ReviewDto>> findAll() {
         List<ReviewDto> reviews = reviewService.findAll();
@@ -50,7 +51,7 @@ public class ReviewController {
             description = "Returns the Review with the specified ID.")
     @ApiResponse(responseCode = "200", description = "Successfully retrieved record.")
     @ApiResponse(responseCode = "404", description = "Review not found.")
-    @RolesAllowed({"ROLE_ADMIN", "ROLE_TEACHER", "ROLE_STUDENT"})
+    @PreAuthorize("hasAnyAuthority('admin','teacher','student')")
     @GetMapping("/{id}")
     public ResponseEntity<ReviewDto> getById(
             @PathVariable @Positive Long id,
@@ -60,12 +61,26 @@ public class ReviewController {
     }
 
     /**
+     * Retrieves the number of approved Reviews.
+     */
+    @Operation(summary = "Get Approved Reviews Count",
+            description = "Returns the number of approved Review records.")
+    @ApiResponse(responseCode = "200", description = "Successfully retrieved count.")
+    @PreAuthorize("hasAnyAuthority('admin')")
+    @GetMapping("/approved-count")
+    public ResponseEntity<Long> countApprovedReviews() {
+        Long count = reviewService.countApprovedReviews();
+        return ResponseEntity.ok(count);
+    }
+
+
+    /**
      * Retrieves all Reviews linked to a Teacher.
      */
     @Operation(summary = "Get Reviews by Teacher",
             description = "Returns a list of all Review records linked to a Teacher.")
     @ApiResponse(responseCode = "200", description = "Successfully retrieved list.")
-    @RolesAllowed({"ROLE_ADMIN", "ROLE_TEACHER"})
+    @PreAuthorize("hasAnyAuthority('admin')")
     @GetMapping("/teacher/{teacherId}")
     public ResponseEntity<List<ReviewDto>> getReviewsByTeacher(
             @PathVariable @Positive Long teacherId,
@@ -81,7 +96,7 @@ public class ReviewController {
             description = "Creates a new Review record.")
     @ApiResponse(responseCode = "201", description = "Review created.")
     @ApiResponse(responseCode = "400", description = "Invalid data provided.")
-    @RolesAllowed({"ROLE_ADMIN", "ROLE_TEACHER"})
+    @PreAuthorize("hasAnyAuthority('admin','teacher')")
     @PostMapping
     public ResponseEntity<ReviewDto> create(
             @RequestBody CreateReviewDto reviewDto) {
@@ -96,7 +111,7 @@ public class ReviewController {
             description = "Updates an existing Review record.")
     @ApiResponse(responseCode = "200", description = "Successfully updated record.")
     @ApiResponse(responseCode = "404", description = "Review not found.")
-    @RolesAllowed({"ROLE_ADMIN", "ROLE_TEACHER"})
+    @PreAuthorize("hasAnyAuthority('admin','teacher')")
     @PutMapping("/{id}")
     public ResponseEntity<ReviewDto> update(
             @PathVariable @Positive Long id,
@@ -113,7 +128,7 @@ public class ReviewController {
             description = "Deletes an existing Review record.")
     @ApiResponse(responseCode = "204", description = "Successfully deleted record.")
     @ApiResponse(responseCode = "404", description = "Review not found.")
-    @RolesAllowed({"ROLE_ADMIN", "ROLE_TEACHER"})
+    @PreAuthorize("hasAnyAuthority('admin','teacher')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(
             @PathVariable @Positive Long id,
@@ -129,7 +144,7 @@ public class ReviewController {
             description = "Links a Review to a Teacher.")
     @ApiResponse(responseCode = "200", description = "Successfully linked.")
     @ApiResponse(responseCode = "404", description = "Review or Teacher not found.")
-    @RolesAllowed({"ROLE_ADMIN", "ROLE_TEACHER"})
+    @PreAuthorize("hasAnyAuthority('admin','teacher')")
     @PostMapping("/{reviewId}/link/{teacherId}")
     public ResponseEntity<ReviewDto> linkTeacher(
             @PathVariable @Positive Long reviewId,
@@ -146,7 +161,7 @@ public class ReviewController {
             description = "Links a Review to a Thesis.")
     @ApiResponse(responseCode = "200", description = "Successfully linked.")
     @ApiResponse(responseCode = "404", description = "Review or Thesis not found.")
-    @RolesAllowed({"ROLE_ADMIN", "ROLE_TEACHER"})
+    @PreAuthorize("hasAnyAuthority('admin','teacher')")
     @PostMapping("/{reviewId}/link/{thesisId}")
     public ResponseEntity<ReviewDto> linkThesis(
             @PathVariable @Positive Long reviewId,

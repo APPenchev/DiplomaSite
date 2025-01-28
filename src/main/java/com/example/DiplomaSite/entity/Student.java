@@ -15,7 +15,7 @@ public class Student extends IdGenerator {
     @Column(nullable = false, unique = true)
     private String facultyNumber;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = true, unique = true)
     private String keycloakUserId;
 
     @OneToOne(mappedBy = "student", cascade = CascadeType.ALL, orphanRemoval = true)

@@ -4,11 +4,13 @@ import com.example.DiplomaSite.entity.IdGenerator;
 import lombok.Data;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @Data
 public class DiplomaDefenseDto extends IdGenerator {
 
     private LocalDate date;
-
-    private Long supervisorId;
+    private String supervisorKeycloakId;
+    private List<String> committeeMembersKeycloakIds;
+    private Long resultId;
 }

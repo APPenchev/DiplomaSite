@@ -13,6 +13,10 @@ public class DiplomaDefense extends IdGenerator {
     private LocalDate date;
 
     @ManyToOne
+    @JoinColumn(name = "thesis_id")
+    private DiplomaThesis diplomaThesis;
+
+    @ManyToOne
     @JoinColumn(name = "supervisor_id")
     private Teacher supervisor;
 

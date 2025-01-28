@@ -11,9 +11,8 @@ public class CreateDiplomaThesisDto {
     private String title;
     @NotBlank
     private String text;
-    @NotBlank
-    private LocalDate uploadDate;
-    @NotBlank
-    private Boolean confidential;
 
+    private LocalDate uploadDate;
+
+    private Long assignmentId;
 }

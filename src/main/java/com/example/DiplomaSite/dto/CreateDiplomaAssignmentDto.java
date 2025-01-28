@@ -1,6 +1,7 @@
 package com.example.DiplomaSite.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 @Data
@@ -13,10 +14,8 @@ public class CreateDiplomaAssignmentDto {
     private String tasks;
     @NotBlank
     private String technologies;
-    @NotBlank
-    private Boolean approved;
-    @NotBlank
+    @NotNull
     private Long studentId;
-    @NotBlank
+    @NotNull
     private Long supervisorId;
 }

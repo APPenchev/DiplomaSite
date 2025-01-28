@@ -12,6 +12,7 @@ import java.util.List;
 @Repository
 public interface ReviewRepository extends JpaRepository<Review, Long> {
 
+    // Done
     // Броят на студените, които са получили отрицателна рецензия на дипломна
     // работа.
     Long countByPositiveFalse();
