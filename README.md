@@ -1,13 +1,16 @@
-<strong>University Graduation Management System</strong>
+# University Graduation Management - Backend  
 
-Overview
+This is the backend of the **University Graduation Management System**, built with **Java Spring Boot**. It provides APIs for handling authentication, user roles, submissions, and graduation process management.
 
-This project is a Java Spring application with an AngularJS frontend and Keycloak for authentication. It streamlines the university graduation process by enabling efficient management of submissions, evaluations, and approvals.
+## Features  
+- RESTful APIs for managing the graduation process  
+- Role-based authentication using **Keycloak**  
+- Secure data storage and access  
+- Integration with the frontend  
 
-Features
+## Tech Stack  
+- **Backend:** Java Spring Boot  
+- **Authentication:** Keycloak  
+- **Database:** PostgreSQL (or specify your DB)
 
-User authentication and role-based access control using Keycloak
-Streamlined workflow for managing the graduation process
-Secure submission and tracking system
-Administrative tools for overseeing approvals and evaluations
-Interactive dashboard for monitoring progress
+Front Repository: [DiplomaSite-Frontend](https://github.com/APPenchev/DimplomaSite-Frontend)
